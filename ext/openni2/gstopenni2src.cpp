@@ -597,20 +597,16 @@ openni2_initialise_devices (GstOpenni2Src * src)
     int colorWidth = src->colorVideoMode.getResolutionX ();
     int colorHeight = src->colorVideoMode.getResolutionY ();
 
-    if (depthWidth == colorWidth && depthHeight == colorHeight) {
-      src->width = depthWidth;
-      src->height = depthHeight;
-      src->fps = src->depthVideoMode.getFps ();
-      src->colorpixfmt = src->colorVideoMode.getPixelFormat ();
-      src->depthpixfmt = src->depthVideoMode.getPixelFormat ();
-    } else {
-      GST_ERROR_OBJECT (src, "Error - expect color and depth to be"
-          " in same resolution: D: %dx%d vs C: %dx%d",
-          depthWidth, depthHeight, colorWidth, colorHeight);
-      return FALSE;
-    }
-    GST_INFO_OBJECT (src, "DEPTH&COLOR resolution: %dx%d",
-        src->width, src->height);
+    src->width = colorWidth;
+    src->height = colorHeight;
+    src->fps = src->colorVideoMode.getFps ();
+    src->depth_width = depthWidth;
+    src->depth_height = depthHeight;
+    src->depth_fps = src->depthVideoMode.getFps ();
+    src->colorpixfmt = src->colorVideoMode.getPixelFormat ();
+    src->depthpixfmt = src->depthVideoMode.getPixelFormat ();
+    GST_INFO_OBJECT (src, "COLOR resolution: %dx%d, DEPTH resolution: %dx%d",
+        src->width, src->height, src->depth_width, src->depth_height);
   } else if (src->depth->isValid ()) {
     src->depthVideoMode = src->depth->getVideoMode ();
     src->width = src->depthVideoMode.getResolutionX ();
@@ -669,21 +665,32 @@ openni2_read_gstbuffer (GstOpenni2Src * src, GstBuffer * buf)
     /* Copy colour information */
     gst_video_frame_map (&vframe, &src->info, buf, GST_MAP_WRITE);
 
+    {
     guint8 *pData = (guint8 *) GST_VIDEO_FRAME_PLANE_DATA (&vframe, 0);
     guint8 *pColor = (guint8 *) src->colorFrame->getData ();
-    /* Add depth as 8bit alpha channel, depth is 16bit samples. */
-    guint16 *pDepth = (guint16 *) src->depthFrame->getData ();
-
     for (int i = 0; i < src->colorFrame->getHeight (); ++i) {
       for (int j = 0; j < src->colorFrame->getWidth (); ++j) {
         pData[4 * j + 0] = pColor[3 * j + 0];
         pData[4 * j + 1] = pColor[3 * j + 1];
         pData[4 * j + 2] = pColor[3 * j + 2];
-        pData[4 * j + 3] = pDepth[j] >> 8;
       }
       pData += GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 0);
       pColor += src->colorFrame->getStrideInBytes ();
+    }
+    }
+
+    // Pack the depth separately
+    /* Add depth as 8bit alpha channel, depth is 16bit samples. */
+    {
+    guint8 *pData = (guint8 *) GST_VIDEO_FRAME_PLANE_DATA (&vframe, 0);
+    guint16 *pDepth = (guint16 *) src->depthFrame->getData ();
+    for (int i = 0; i < src->depthFrame->getHeight (); ++i) {
+      for (int j = 0; j < src->depthFrame->getWidth (); ++j) {
+        pData[4 * j + 3] = (guint8)pDepth[j];
+      }
+      pData += GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 0);
       pDepth += src->depthFrame->getStrideInBytes () / 2;
+    }
     }
     gst_video_frame_unmap (&vframe);
 

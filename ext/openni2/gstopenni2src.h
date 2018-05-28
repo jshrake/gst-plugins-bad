@@ -66,6 +66,7 @@ struct _GstOpenni2Src
   openni::VideoMode depthVideoMode, colorVideoMode;
   openni::PixelFormat depthpixfmt, colorpixfmt;
   int width, height, fps;
+  int depth_width, depth_height, depth_fps;
   openni::VideoFrameRef *depthFrame, *colorFrame;
 };
 
